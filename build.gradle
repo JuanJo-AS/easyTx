@@ -23,6 +23,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation 'org.postgresql:postgresql:42.6.0'
+	implementation "io.micrometer:micrometer-core"
 
 	api 'org.slf4j:slf4j-api:2.0.9'
 	

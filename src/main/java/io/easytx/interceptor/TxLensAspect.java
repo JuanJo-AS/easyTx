@@ -13,6 +13,7 @@ import io.easytx.annotation.TransactionConfiguration;
 import io.easytx.annotation.TxRead;
 import io.easytx.annotation.TxWrite;
 import io.easytx.annotation.Write;
+import io.easytx.metrics.Metrics;
 import io.easytx.routing.RoutingDataSource;
 import io.easytx.service.TransactionService;
 
@@ -21,23 +22,27 @@ import io.easytx.service.TransactionService;
 public class TxLensAspect {
 
     private final TransactionService transactionService;
+    private final Metrics metrics;
     private static final Logger LOGGER = LoggerFactory.getLogger(TxLensAspect.class);
 
-    public TxLensAspect(TransactionService transactionService) {
+    public TxLensAspect(TransactionService transactionService, Metrics metrics) {
         this.transactionService = transactionService;
+        this.metrics = metrics;
     }
 
     @Around("@annotation(txRead)")
     public Object aroundTxRead(ProceedingJoinPoint pjp, TxRead txRead) {
         TransactionConfiguration transactionConfig = new TransactionConfiguration(txRead);
-        return transactionService.withReadTransaction(() -> execute(pjp, txRead.logLevel()),
+        return transactionService.withReadTransaction(
+                () -> executeWithMicrometer(pjp, txRead.logLevel(), "read transaction"),
                 transactionConfig);
     }
 
     @Around("@annotation(txWrite)")
     public Object aroundTxWrite(ProceedingJoinPoint pjp, TxWrite txWrite) {
         TransactionConfiguration transactionConfig = new TransactionConfiguration(txWrite);
-        return transactionService.withWriteTransaction(() -> execute(pjp, txWrite.logLevel()),
+        return transactionService.withWriteTransaction(
+                () -> executeWithMicrometer(pjp, txWrite.logLevel(), "write transaction"),
                 transactionConfig);
     }
 
@@ -78,6 +83,24 @@ public class TxLensAspect {
         }
     }
 
+    private Object executeWithMicrometer(ProceedingJoinPoint pjp, LogLevel logLevel, String type) {
+        long start = getStartTime(logLevel);
+        Signature signature = pjp.getSignature();
+        String className = signature.getDeclaringTypeName();
+        String methodName = signature.getName();
+        try {
+            logWrap(logLevel, "{} -> {}: transaction started", className, methodName);
+            return pjp.proceed();
+        } catch (Throwable e) {
+            metrics.incrementErrors(type);
+            throw new RuntimeException(e);
+        } finally {
+            logWrap(logLevel, "{} -> {}: transaction finished", className, methodName);
+            long durationNs = System.nanoTime() - start;
+            logTimeWithMicrometer(logLevel, "Transaction took {} ms", durationNs, type);
+        }
+    }
+
     private void logWrap(LogLevel level, String message, Object... params) {
         if (level.logWrap()) {
             LOGGER.info(message, params);
@@ -92,9 +115,17 @@ public class TxLensAspect {
         }
     }
 
-    private void logTime(LogLevel level, String message, Object... params) {
+    private void logTime(LogLevel level, String message, long seconds) {
         if (level.logTime()) {
-            LOGGER.info(message, params);
+            LOGGER.info(message, seconds);
+        }
+    }
+
+    private void logTimeWithMicrometer(LogLevel level, String message, long nanoseconds,
+            String type) {
+        if (level.logTime()) {
+            metrics.recordTransactionTime(type, nanoseconds);
+            LOGGER.info(message, nanoseconds);
         }
     }
 
