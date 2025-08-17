@@ -8,9 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import io.easytx.annotation.LogLevel;
+import io.easytx.annotation.Read;
 import io.easytx.annotation.TransactionConfiguration;
 import io.easytx.annotation.TxRead;
 import io.easytx.annotation.TxWrite;
+import io.easytx.annotation.Write;
 
 @Service
 public class TransactionService {
@@ -60,15 +62,26 @@ public class TransactionService {
 
     // Ejemplo de acceso a jdbc para lectura (puedes extenderlo)
     @TxRead(logLevel = LogLevel.ALL)
-    public List<String> readExample() {
+    public List<String> readTransactionExample() {
         return withReadTransaction(() -> readJdbcTemplate.query("SELECT mensaje FROM test_txlens",
                 (rs, rowNum) -> rs.getString("mensaje")));
     }
 
     // Ejemplo de acceso a jdbc para escritura
     @TxWrite()
-    public int writeExample(String message) {
+    public int writeTransactionExample(String message) {
         return withWriteTransaction(() -> writeJdbcTemplate
                 .update("INSERT INTO test_txlens (mensaje) VALUES (?)", message));
+    }
+
+    @Read
+    public List<String> readExample() {
+        return readJdbcTemplate.query("SELECT mensaje FROM test_txlens",
+                (rs, rowNum) -> rs.getString("mensaje"));
+    }
+
+    @Write
+    public int writeExample(String message) {
+        return writeJdbcTemplate.update("INSERT INTO test_txlens (mensaje) VALUES (?)", message);
     }
 }

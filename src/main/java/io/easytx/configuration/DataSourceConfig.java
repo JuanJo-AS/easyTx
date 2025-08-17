@@ -1,5 +1,7 @@
 package io.easytx.configuration;
 
+import java.util.HashMap;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -8,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import io.easytx.routing.RoutingDataSource;
 
 @Configuration
 public class DataSourceConfig {
@@ -34,5 +37,22 @@ public class DataSourceConfig {
     public PlatformTransactionManager readTransactionManager(
             @Qualifier("readDataSource") DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
+    }
+
+    @Bean
+    public DataSource routingDataSource(@Qualifier("writeDataSource") DataSource writeDataSource,
+            @Qualifier("readDataSource") DataSource readDataSource) {
+        RoutingDataSource routing = new RoutingDataSource();
+        Map<Object, Object> targets = new HashMap<>();
+        targets.put(writeDataSource, "write");
+        targets.put(readDataSource, "read");
+        routing.setTargetDataSources(targets);
+        routing.setDefaultTargetDataSource(writeDataSource);
+        return routing;
+    }
+
+    @Bean
+    public DataSourceTransactionManager transactionManager(DataSource routingDataSource) {
+        return new DataSourceTransactionManager(routingDataSource);
     }
 }

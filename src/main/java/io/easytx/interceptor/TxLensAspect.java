@@ -8,9 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import io.easytx.annotation.LogLevel;
+import io.easytx.annotation.Read;
 import io.easytx.annotation.TransactionConfiguration;
 import io.easytx.annotation.TxRead;
 import io.easytx.annotation.TxWrite;
+import io.easytx.annotation.Write;
+import io.easytx.routing.RoutingDataSource;
 import io.easytx.service.TransactionService;
 
 @Aspect
@@ -38,6 +41,26 @@ public class TxLensAspect {
                 transactionConfig);
     }
 
+    @Around("@annotation(read)")
+    public Object aroundRead(ProceedingJoinPoint pjp, Read read) {
+        return route(pjp, "read");
+    }
+
+    @Around("@annotation(write)")
+    public Object aroundRead(ProceedingJoinPoint pjp, Write write) {
+        return route(pjp, "write");
+    }
+
+    private Object route(ProceedingJoinPoint pjp, String dataSourceKey) {
+        try {
+            RoutingDataSource.setDataSourceKey(dataSourceKey);
+            return execute(pjp, null);
+        } finally {
+            RoutingDataSource.clear();
+        }
+    }
+
+
     private Object execute(ProceedingJoinPoint pjp, LogLevel logLevel) {
         long start = getStartTime(logLevel);
         Signature signature = pjp.getSignature();
@@ -56,13 +79,13 @@ public class TxLensAspect {
     }
 
     private void logWrap(LogLevel level, String message, Object... params) {
-        if (level == LogLevel.WRAP || level == LogLevel.ALL) {
+        if (level.logWrap()) {
             LOGGER.info(message, params);
         }
     }
 
     private long getStartTime(LogLevel level) {
-        if (level == LogLevel.TIME || level == LogLevel.ALL) {
+        if (level.logTime()) {
             return System.nanoTime();
         } else {
             return 0l;
@@ -70,7 +93,7 @@ public class TxLensAspect {
     }
 
     private void logTime(LogLevel level, String message, Object... params) {
-        if (level == LogLevel.TIME || level == LogLevel.ALL) {
+        if (level.logTime()) {
             LOGGER.info(message, params);
         }
     }
