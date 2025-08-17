@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    write:
+      jdbc-url: jdbc:postgresql://localhost:5432/platzi-market
+      username: writer
+      password: writerpass
+      driver-class-name: org.postgresql.Driver
+    read:
+      jdbc-url: jdbc:postgresql://localhost:5432/platzi-market
+      username: reader
+      password: readerpass
+      driver-class-name: org.postgresql.Driver
