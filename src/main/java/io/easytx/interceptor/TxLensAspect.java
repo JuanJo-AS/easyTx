@@ -79,7 +79,7 @@ public class TxLensAspect {
         } finally {
             logWrap(logLevel, "{} -> {}: transaction finished", className, methodName);
             long durationNs = System.nanoTime() - start;
-            logTime(logLevel, "Transaction took {} ms", getSeconds(durationNs));
+            logTime(logLevel, "Transaction took {} ms", getMilliseconds(durationNs));
         }
     }
 
@@ -125,11 +125,11 @@ public class TxLensAspect {
             String type) {
         if (level.logTime()) {
             metrics.recordTransactionTime(type, nanoseconds);
-            LOGGER.info(message, nanoseconds);
+            LOGGER.info(message, getMilliseconds(nanoseconds));
         }
     }
 
-    private long getSeconds(long nanoSeconds) {
+    private long getMilliseconds(long nanoSeconds) {
         return nanoSeconds / 1_000_000;
     }
 

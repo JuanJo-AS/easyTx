@@ -14,11 +14,15 @@ public class Metrics {
     }
 
     public void recordTransactionTime(String type, long nanos) {
-        Timer.builder("txlens").tag("type", type).register(registry).record(nanos,
-                TimeUnit.NANOSECONDS);
+        if (registry != null) {
+            Timer.builder("txlens").tag("type", type).register(registry).record(nanos,
+                    TimeUnit.NANOSECONDS);
+        }
     }
 
     public void incrementErrors(String type) {
-        Counter.builder("txlens.errors").tag("type", type).register(registry).increment();
+        if (registry != null) {
+            Counter.builder("txlens.errors").tag("type", type).register(registry).increment();
+        }
     }
 }

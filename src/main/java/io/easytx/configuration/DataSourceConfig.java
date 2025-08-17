@@ -42,10 +42,11 @@ public class DataSourceConfig {
     @Bean
     public DataSource routingDataSource(@Qualifier("writeDataSource") DataSource writeDataSource,
             @Qualifier("readDataSource") DataSource readDataSource) {
-        RoutingDataSource routing = new RoutingDataSource();
         Map<Object, Object> targets = new HashMap<>();
-        targets.put(writeDataSource, "write");
-        targets.put(readDataSource, "read");
+        targets.put("write", writeDataSource);
+        targets.put("read", readDataSource);
+
+        RoutingDataSource routing = new RoutingDataSource();
         routing.setTargetDataSources(targets);
         routing.setDefaultTargetDataSource(writeDataSource);
         return routing;
