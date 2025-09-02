@@ -17,9 +17,12 @@ public class EasyTxApplication {
 
 	@Bean
 	public CommandLineRunner demo(TransactionService transactionService) {
+		/*
+		 * return args -> {
+		 * transactionService.writeTransactionExample("Hello transactional world!");
+		 * transactionService.readTransactionExample().forEach(System.out::println); };
+		 */
 		return args -> {
-			transactionService.writeTransactionExample("Hello transactional world!");
-			transactionService.readTransactionExample().forEach(System.out::println);
 		};
 	}
 

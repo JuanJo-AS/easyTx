@@ -17,6 +17,11 @@ public class TransactionConfiguration {
         this.isolation = txWrite.isolation();
     }
 
+    public TransactionConfiguration(Propagation propagation, Isolation isolation) {
+        this.propagation = propagation;
+        this.isolation = isolation;
+    }
+
     public Propagation getPropagation() {
         return propagation;
     }
