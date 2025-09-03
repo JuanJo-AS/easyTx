@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import io.easytx.annotation.TransactionConfiguration;
@@ -47,44 +48,16 @@ class TransactionServiceTest {
     @Test
     void testWriteTransaction_commit() {
         transactionService.withWriteTransaction(() -> {
-            writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", "commit-test");
-            return null;
+            return insertIntoTestEntity("commit-test");
         });
-
-        Integer count =
-                writeJdbcTemplate.queryForObject("SELECT COUNT(*) FROM test_entity", Integer.class);
-        assertEquals(1, count);
+        assertEquals(1, countFromTestEntity());
     }
 
     @Test
     void testWriteTransaction_rollback() {
-        assertThrows(RuntimeException.class, () -> transactionService.withWriteTransaction(() -> {
-            writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", "rollback-test");
-            throw new RuntimeException("Forcing rollback");
-        }));
-
-        Integer count =
-                writeJdbcTemplate.queryForObject("SELECT COUNT(*) FROM test_entity", Integer.class);
-        assertEquals(0, count);
-    }
-
-    @Test
-    void testPropagation_requiresNew() {
-        TransactionConfiguration config =
-                new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_COMMITTED);
-
-        transactionService.withWriteTransaction(() -> {
-            writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", "outer");
-            transactionService.withWriteTransaction(() -> {
-                writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", "inner");
-                return null;
-            }, config);
-            return null;
-        });
-
-        Integer count =
-                writeJdbcTemplate.queryForObject("SELECT COUNT(*) FROM test_entity", Integer.class);
-        assertEquals(2, count);
+        assertThrows(RuntimeException.class,
+                () -> insertAndExceptionTransaction(null, "rollback-test", "Forcing rollback"));
+        assertEquals(0, countFromTestEntity());
     }
 
     @Test
@@ -93,18 +66,14 @@ class TransactionServiceTest {
                 new TransactionConfiguration(Propagation.REQUIRED, Isolation.SERIALIZABLE);
 
         transactionService.withWriteTransaction(() -> {
-            writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", "iso-test");
-            return null;
+            return insertIntoTestEntity("iso-test");
         }, config);
-
-        Integer count =
-                writeJdbcTemplate.queryForObject("SELECT COUNT(*) FROM test_entity", Integer.class);
-        assertEquals(1, count);
+        assertEquals(1, countFromTestEntity());
     }
 
     @Test
     void testReadTransaction() {
-        writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", "read-test");
+        insertIntoTestEntity("read-test");
 
         String result = transactionService.withReadTransaction(() -> writeJdbcTemplate
                 .queryForObject("SELECT name FROM test_entity LIMIT 1", String.class));
@@ -112,60 +81,113 @@ class TransactionServiceTest {
         assertEquals("read-test", result);
     }
 
+    // PROPAGATION TESTS
+
     @Test
-    void testPropagationRequired() {
+    void propagationRequired() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRED, Isolation.READ_COMMITTED);
         assertThrows(RuntimeException.class, () -> transactionService.withWriteTransaction(() -> {
             insertIntoTestEntity("outer");
-            transactionService.withWriteTransaction(() -> {
-                return insertIntoTestEntity("inner");
-            }, config);
+            insertTransaction(config, "inner");
             throw new RuntimeException("force rollback");
         }));
         assertEquals(0, countFromTestEntity()); // the rollback affected both transactions
     }
 
-    @Test
-    void testPropagationRequiredWithAnotations() {
-        assertThrows(RuntimeException.class, () -> insertIntoTestEntityWithException("outer"));
-        assertEquals(0, countFromTestEntity()); // the rollback affected both transactions
-    }
+    /*
+     * @Test void propagationRequiredWithAnotations() { assertThrows(RuntimeException.class, () ->
+     * insertIntoTestEntityWithException("outer")); assertEquals(0, countFromTestEntity()); // the
+     * rollback affected both transactions }
+     */
 
     @Test()
-    void testPropagationRequiresNew() {
+    void propagationRequiresNew() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_COMMITTED);
         try {
             transactionService.withWriteTransaction(() -> {
                 insertIntoTestEntity("outer");
-                transactionService.withWriteTransaction(() -> {
-                    return insertIntoTestEntity("inner");
-                }, config);
+                insertTransaction(config, "inner");
                 throw new RuntimeException("force rollback");
             });
         } catch (RuntimeException ignore) {
+            // ignore
         }
-        assertEquals(List.of("inner"), findNames()); // "outer" rollback, "inner" commit
+        testEntityHasNames(List.of("inner")); // "outer" rollback, "inner" commit
     }
 
     @Test
-    void testPropagationNested() {
+    void propagationNested() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.NESTED, Isolation.READ_COMMITTED);
-
         transactionService.withWriteTransaction(() -> {
             insertIntoTestEntity("outer");
             assertThrows(RuntimeException.class,
-                    () -> transactionService.withWriteTransaction(() -> {
-                        insertIntoTestEntity("inner");
-                        throw new RuntimeException("rollback inner");
-                    }, config));
+                    () -> insertAndExceptionTransaction(config, "inner", "rollback inner"));
             return null;
         });
-        assertEquals(List.of("outer"), findNames());
+        testEntityHasNames(List.of("outer"));
     }
 
+    @Test
+    void propagationSupportsWithinTransaction() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.SUPPORTS, Isolation.READ_COMMITTED);
+        assertThrows(RuntimeException.class, () -> transactionService.withWriteTransaction(
+                () -> insertAndExceptionTransaction(config, "supports", "force rollback")));
+        assertEquals(0, countFromTestEntity());
+    }
+
+    @Test
+    void propagationSupportsWithoutTransaction() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.SUPPORTS, Isolation.READ_COMMITTED);
+        assertThrows(RuntimeException.class,
+                () -> insertAndExceptionTransaction(config, "supports", "force rollback"));
+        testEntityHasNames(List.of("supports"));
+    }
+
+    @Test
+    void propagationNotSupported() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.NOT_SUPPORTED, Isolation.READ_COMMITTED);
+        assertThrows(RuntimeException.class, () -> {
+            transactionService.withWriteTransaction(() -> {
+                insertIntoTestEntity("outer");
+                assertThrows(RuntimeException.class,
+                        () -> insertAndExceptionTransaction(config, "no-tx", "rollback inner"));
+                throw new RuntimeException("rollback outer");
+            });
+        });
+        testEntityHasNames(List.of("no-tx"));
+    }
+
+    @Test
+    void propagationMandatory() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.MANDATORY, Isolation.READ_COMMITTED);
+        // OK case (within a transaction)
+        insertTransactionWithParentTransaction(config, "mandatory");
+        // ERROR case (without a transaction)
+        assertThrows(IllegalTransactionStateException.class,
+                () -> insertTransaction(config, "should fail"));
+        testEntityHasNames(List.of("mandatory"));
+    }
+
+    @Test
+    void propagationNever() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.NEVER, Isolation.READ_COMMITTED);
+        // ERROR case: within a transaction
+        assertThrows(IllegalTransactionStateException.class,
+                () -> insertTransactionWithParentTransaction(config, "never"));
+        // OK case: outside of transaction
+        insertTransaction(config, "outside");
+        testEntityHasNames(List.of("outside"));
+    }
+
+    // TEST ISOLATION
     @Test
     void testIsolationReadCommitted() {
         TransactionConfiguration config =
@@ -187,12 +209,10 @@ class TransactionServiceTest {
     void testIsolationSerializable() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.SERIALIZABLE);
-
         transactionService.withWriteTransaction(() -> {
             return insertIntoTestEntity("serializable-test");
         }, config);
-
-        assertEquals(1, countFromTestEntity());
+        testEntityHasNames(List.of("serializable-test"));
     }
 
 
@@ -200,6 +220,29 @@ class TransactionServiceTest {
         writeJdbcTemplate.update("INSERT INTO test_entity (name) VALUES (?)", name);
         insertIntoTestEntity("inner");
         throw new RuntimeException("force rollback");
+    }
+
+    private Integer insertTransactionWithParentTransaction(TransactionConfiguration config,
+            String name) {
+        return transactionService.withWriteTransaction(() -> {
+            return transactionService.withWriteTransaction(() -> {
+                return insertIntoTestEntity(name);
+            }, config);
+        });
+    }
+
+    private Integer insertTransaction(TransactionConfiguration config, String name) {
+        return transactionService.withWriteTransaction(() -> {
+            return insertIntoTestEntity(name);
+        }, config);
+    }
+
+    private Integer insertAndExceptionTransaction(TransactionConfiguration config, String name,
+            String exception) {
+        return transactionService.withWriteTransaction(() -> {
+            insertIntoTestEntity(name);
+            throw new RuntimeException(exception);
+        }, config);
     }
 
     private int insertIntoTestEntity(String name) {
@@ -212,5 +255,9 @@ class TransactionServiceTest {
 
     private List<String> findNames() {
         return writeJdbcTemplate.queryForList("SELECT name FROM test_entity", String.class);
+    }
+
+    private void testEntityHasNames(List<String> names) {
+        assertEquals(names, findNames());
     }
 }

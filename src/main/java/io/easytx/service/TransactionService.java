@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.support.TransactionTemplate;
 import io.easytx.annotation.TransactionConfiguration;
 
@@ -32,28 +34,45 @@ public class TransactionService {
 
     // Transacción de escritura, con commit/rollback
     public <T> T withWriteTransaction(Supplier<T> callback) {
-        return writeTransactionTemplate.execute(status -> callback.get());
-    }
-
-    public <T> T withWriteTransaction(Supplier<T> callback,
-            TransactionConfiguration configuration) {
+        TransactionConfiguration configuration = defaultConfig();
         writeTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
         writeTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
         return writeTransactionTemplate.execute(status -> callback.get());
     }
 
+    public <T> T withWriteTransaction(Supplier<T> callback,
+            TransactionConfiguration configuration) {
+        if (configuration == null) {
+            configuration = defaultConfig();
+        }
+        writeTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
+        writeTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
+        return writeTransactionTemplate.execute(status -> callback.get());
+    }
+
+
     // Transacción de solo lectura, readOnly=true
     public <T> T withReadTransaction(Supplier<T> callback) {
+        TransactionConfiguration configuration = defaultConfig();
+        readTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
+        readTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
         readTransactionTemplate.setReadOnly(true);
         return readTransactionTemplate.execute(status -> callback.get());
     }
 
     public <T> T withReadTransaction(Supplier<T> callback, TransactionConfiguration configuration) {
+        if (configuration == null) {
+            configuration = defaultConfig();
+        }
         readTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
         readTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
+        readTransactionTemplate.setReadOnly(true);
         return writeTransactionTemplate.execute(status -> callback.get());
     }
 
+    private TransactionConfiguration defaultConfig() {
+        return new TransactionConfiguration(Propagation.REQUIRED, Isolation.DEFAULT);
+    }
     /*
      * // Ejemplo de acceso a jdbc para lectura (puedes extenderlo)
      * 
