@@ -19,13 +19,13 @@ import io.easytx.service.TransactionService;
 
 @Aspect
 @Component
-public class TxLensAspect {
+public class EasyTxAspect {
 
     private final TransactionService transactionService;
     private final Metrics metrics;
-    private static final Logger LOGGER = LoggerFactory.getLogger(TxLensAspect.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(EasyTxAspect.class);
 
-    public TxLensAspect(TransactionService transactionService, Metrics metrics) {
+    public EasyTxAspect(TransactionService transactionService, Metrics metrics) {
         this.transactionService = transactionService;
         this.metrics = metrics;
     }

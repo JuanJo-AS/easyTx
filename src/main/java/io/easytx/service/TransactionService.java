@@ -34,63 +34,46 @@ public class TransactionService {
 
     // Transacción de escritura, con commit/rollback
     public <T> T withWriteTransaction(Supplier<T> callback) {
-        TransactionConfiguration configuration = defaultConfig();
-        writeTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
-        writeTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
+        configureWriteTransaction(defaultConfig());
         return writeTransactionTemplate.execute(status -> callback.get());
     }
 
     public <T> T withWriteTransaction(Supplier<T> callback,
             TransactionConfiguration configuration) {
+        configureWriteTransaction(configuration);
+        return writeTransactionTemplate.execute(status -> callback.get());
+    }
+
+    // Transacción de solo lectura, readOnly=true
+    public <T> T withReadTransaction(Supplier<T> callback) {
+        configureReadTransaction(defaultConfig());
+        return readTransactionTemplate.execute(status -> callback.get());
+    }
+
+    public <T> T withReadTransaction(Supplier<T> callback, TransactionConfiguration configuration) {
+        configureReadTransaction(configuration);
+        return writeTransactionTemplate.execute(status -> callback.get());
+    }
+
+    private void configureWriteTransaction(TransactionConfiguration configuration) {
         if (configuration == null) {
             configuration = defaultConfig();
         }
         writeTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
         writeTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
-        return writeTransactionTemplate.execute(status -> callback.get());
     }
 
-
-    // Transacción de solo lectura, readOnly=true
-    public <T> T withReadTransaction(Supplier<T> callback) {
-        TransactionConfiguration configuration = defaultConfig();
-        readTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
-        readTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
-        readTransactionTemplate.setReadOnly(true);
-        return readTransactionTemplate.execute(status -> callback.get());
-    }
-
-    public <T> T withReadTransaction(Supplier<T> callback, TransactionConfiguration configuration) {
+    private void configureReadTransaction(TransactionConfiguration configuration) {
         if (configuration == null) {
             configuration = defaultConfig();
         }
         readTransactionTemplate.setPropagationBehavior(configuration.getPropagation().value());
         readTransactionTemplate.setIsolationLevel(configuration.getIsolation().value());
         readTransactionTemplate.setReadOnly(true);
-        return writeTransactionTemplate.execute(status -> callback.get());
     }
 
     private TransactionConfiguration defaultConfig() {
         return new TransactionConfiguration(Propagation.REQUIRED, Isolation.DEFAULT);
     }
-    /*
-     * // Ejemplo de acceso a jdbc para lectura (puedes extenderlo)
-     * 
-     * @TxRead(logLevel = LogLevel.ALL) public List<String> readTransactionExample() { return
-     * withReadTransaction(() -> readJdbcTemplate.query("SELECT mensaje FROM test_txlens", (rs,
-     * rowNum) -> rs.getString("mensaje"))); }
-     * 
-     * // Ejemplo de acceso a jdbc para escritura
-     * 
-     * @TxWrite() public int writeTransactionExample(String message) { return
-     * withWriteTransaction(() -> writeJdbcTemplate
-     * .update("INSERT INTO test_txlens (mensaje) VALUES (?)", message)); }
-     * 
-     * @Read public List<String> readExample() { return
-     * readJdbcTemplate.query("SELECT mensaje FROM test_txlens", (rs, rowNum) ->
-     * rs.getString("mensaje")); }
-     * 
-     * @Write public int writeExample(String message) { return
-     * writeJdbcTemplate.update("INSERT INTO test_txlens (mensaje) VALUES (?)", message); }
-     */
+
 }
