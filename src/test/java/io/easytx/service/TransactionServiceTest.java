@@ -74,11 +74,8 @@ class TransactionServiceTest {
     @Test
     void testReadTransaction() {
         insertIntoTestEntity("read-test");
-
-        String result = transactionService.withReadTransaction(() -> writeJdbcTemplate
-                .queryForObject("SELECT name FROM test_entity LIMIT 1", String.class));
-
-        assertEquals("read-test", result);
+        List<String> result = transactionService.withReadTransaction(this::findNames);
+        assertEquals(List.of("read-test"), result);
     }
 
     // PROPAGATION TESTS
@@ -189,20 +186,25 @@ class TransactionServiceTest {
 
     // TEST ISOLATION
     @Test
+    void readUncommitedDirtyRead() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_UNCOMMITTED);
+        Integer count = transactionService.withWriteTransaction(() -> {
+            insertIntoTestEntity("uncommitted");
+            return countFromTestEntity();
+        }, config);
+        assertEquals(1, count); // can read the uncommitter insert
+    }
+
+    @Test
     void testIsolationReadCommitted() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_COMMITTED);
-
-        transactionService.withWriteTransaction(() -> {
+        Integer count = transactionService.withWriteTransaction(() -> {
             insertIntoTestEntity("uncommitted");
-
-            // en paralelo simulamos otra transacción REQUIRES_NEW con READ_COMMITTED
-            String result = transactionService
-                    .withWriteTransaction(this::countFromTestEntity, config).toString();
-
-            assertEquals("0", result); // no ve el insert sin commit
-            return null;
-        });
+            return transactionService.withReadTransaction(this::countFromTestEntity, config);
+        }, config);
+        assertEquals(0, count); // can't read the uncommitter insert
     }
 
     @Test
@@ -213,6 +215,21 @@ class TransactionServiceTest {
             return insertIntoTestEntity("serializable-test");
         }, config);
         testEntityHasNames(List.of("serializable-test"));
+    }
+
+    @Test
+    void testIsolation() {
+        TransactionConfiguration config =
+                new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.REPEATABLE_READ);
+        insertIntoTestEntity("insert 1");
+        transactionService.withWriteTransaction(() -> {
+            assertEquals(1,
+                    transactionService.withReadTransaction(this::countFromTestEntity, config));
+            insertIntoTestEntity("insert 2");
+            assertEquals(1,
+                    transactionService.withReadTransaction(this::countFromTestEntity, config));
+            return null;
+        }, config);
     }
 
 
