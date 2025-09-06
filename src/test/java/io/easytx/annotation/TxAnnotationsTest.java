@@ -28,13 +28,13 @@ class TxAnnotationsTest {
     @Test
     void testTxReadAnnotation() {
         annotatedService.doReadOperation();
-        verify(transactionService, atLeastOnce()).withReadTransaction(any(), any());
+        verify(transactionService, atLeastOnce()).read(any(), any());
     }
 
     @Test
     void testTxWriteAnnotation() {
         annotatedService.doWriteOperation();
-        verify(transactionService, atLeastOnce()).withWriteTransaction(any(), any());
+        verify(transactionService, atLeastOnce()).write(any(), any());
     }
 
     @Test

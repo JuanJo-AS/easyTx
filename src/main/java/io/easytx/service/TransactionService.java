@@ -33,24 +33,23 @@ public class TransactionService {
     }
 
     // Transacción de escritura, con commit/rollback
-    public <T> T withWriteTransaction(Supplier<T> callback) {
+    public <T> T write(Supplier<T> callback) {
         configureWriteTransaction(defaultConfig());
         return writeTransactionTemplate.execute(status -> callback.get());
     }
 
-    public <T> T withWriteTransaction(Supplier<T> callback,
-            TransactionConfiguration configuration) {
+    public <T> T write(Supplier<T> callback, TransactionConfiguration configuration) {
         configureWriteTransaction(configuration);
         return writeTransactionTemplate.execute(status -> callback.get());
     }
 
     // Transacción de solo lectura, readOnly=true
-    public <T> T withReadTransaction(Supplier<T> callback) {
+    public <T> T read(Supplier<T> callback) {
         configureReadTransaction(defaultConfig());
         return readTransactionTemplate.execute(status -> callback.get());
     }
 
-    public <T> T withReadTransaction(Supplier<T> callback, TransactionConfiguration configuration) {
+    public <T> T read(Supplier<T> callback, TransactionConfiguration configuration) {
         configureReadTransaction(configuration);
         return writeTransactionTemplate.execute(status -> callback.get());
     }

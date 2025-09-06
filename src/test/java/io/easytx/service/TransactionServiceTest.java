@@ -47,7 +47,7 @@ class TransactionServiceTest {
 
     @Test
     void testWriteTransaction_commit() {
-        transactionService.withWriteTransaction(() -> {
+        transactionService.write(() -> {
             return insertIntoTestEntity("commit-test");
         });
         assertEquals(1, countFromTestEntity());
@@ -65,7 +65,7 @@ class TransactionServiceTest {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRED, Isolation.SERIALIZABLE);
 
-        transactionService.withWriteTransaction(() -> {
+        transactionService.write(() -> {
             return insertIntoTestEntity("iso-test");
         }, config);
         assertEquals(1, countFromTestEntity());
@@ -74,7 +74,7 @@ class TransactionServiceTest {
     @Test
     void testReadTransaction() {
         insertIntoTestEntity("read-test");
-        List<String> result = transactionService.withReadTransaction(this::findNames);
+        List<String> result = transactionService.read(this::findNames);
         assertEquals(List.of("read-test"), result);
     }
 
@@ -84,7 +84,7 @@ class TransactionServiceTest {
     void propagationRequired() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRED, Isolation.READ_COMMITTED);
-        assertThrows(RuntimeException.class, () -> transactionService.withWriteTransaction(() -> {
+        assertThrows(RuntimeException.class, () -> transactionService.write(() -> {
             insertIntoTestEntity("outer");
             insertTransaction(config, "inner");
             throw new RuntimeException("force rollback");
@@ -103,7 +103,7 @@ class TransactionServiceTest {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_COMMITTED);
         try {
-            transactionService.withWriteTransaction(() -> {
+            transactionService.write(() -> {
                 insertIntoTestEntity("outer");
                 insertTransaction(config, "inner");
                 throw new RuntimeException("force rollback");
@@ -118,7 +118,7 @@ class TransactionServiceTest {
     void propagationNested() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.NESTED, Isolation.READ_COMMITTED);
-        transactionService.withWriteTransaction(() -> {
+        transactionService.write(() -> {
             insertIntoTestEntity("outer");
             assertThrows(RuntimeException.class,
                     () -> insertAndExceptionTransaction(config, "inner", "rollback inner"));
@@ -131,8 +131,8 @@ class TransactionServiceTest {
     void propagationSupportsWithinTransaction() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.SUPPORTS, Isolation.READ_COMMITTED);
-        assertThrows(RuntimeException.class, () -> transactionService.withWriteTransaction(
-                () -> insertAndExceptionTransaction(config, "supports", "force rollback")));
+        assertThrows(RuntimeException.class, () -> transactionService
+                .write(() -> insertAndExceptionTransaction(config, "supports", "force rollback")));
         assertEquals(0, countFromTestEntity());
     }
 
@@ -150,7 +150,7 @@ class TransactionServiceTest {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.NOT_SUPPORTED, Isolation.READ_COMMITTED);
         assertThrows(RuntimeException.class, () -> {
-            transactionService.withWriteTransaction(() -> {
+            transactionService.write(() -> {
                 insertIntoTestEntity("outer");
                 assertThrows(RuntimeException.class,
                         () -> insertAndExceptionTransaction(config, "no-tx", "rollback inner"));
@@ -189,7 +189,7 @@ class TransactionServiceTest {
     void readUncommitedDirtyRead() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_UNCOMMITTED);
-        Integer count = transactionService.withWriteTransaction(() -> {
+        Integer count = transactionService.write(() -> {
             insertIntoTestEntity("uncommitted");
             return countFromTestEntity();
         }, config);
@@ -200,9 +200,9 @@ class TransactionServiceTest {
     void testIsolationReadCommitted() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.READ_COMMITTED);
-        Integer count = transactionService.withWriteTransaction(() -> {
+        Integer count = transactionService.write(() -> {
             insertIntoTestEntity("uncommitted");
-            return transactionService.withReadTransaction(this::countFromTestEntity, config);
+            return transactionService.read(this::countFromTestEntity, config);
         }, config);
         assertEquals(0, count); // can't read the uncommitter insert
     }
@@ -211,7 +211,7 @@ class TransactionServiceTest {
     void testIsolationSerializable() {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.SERIALIZABLE);
-        transactionService.withWriteTransaction(() -> {
+        transactionService.write(() -> {
             return insertIntoTestEntity("serializable-test");
         }, config);
         testEntityHasNames(List.of("serializable-test"));
@@ -222,12 +222,10 @@ class TransactionServiceTest {
         TransactionConfiguration config =
                 new TransactionConfiguration(Propagation.REQUIRES_NEW, Isolation.REPEATABLE_READ);
         insertIntoTestEntity("insert 1");
-        transactionService.withWriteTransaction(() -> {
-            assertEquals(1,
-                    transactionService.withReadTransaction(this::countFromTestEntity, config));
+        transactionService.write(() -> {
+            assertEquals(1, transactionService.read(this::countFromTestEntity, config));
             insertIntoTestEntity("insert 2");
-            assertEquals(1,
-                    transactionService.withReadTransaction(this::countFromTestEntity, config));
+            assertEquals(1, transactionService.read(this::countFromTestEntity, config));
             return null;
         }, config);
     }
@@ -241,22 +239,22 @@ class TransactionServiceTest {
 
     private Integer insertTransactionWithParentTransaction(TransactionConfiguration config,
             String name) {
-        return transactionService.withWriteTransaction(() -> {
-            return transactionService.withWriteTransaction(() -> {
+        return transactionService.write(() -> {
+            return transactionService.write(() -> {
                 return insertIntoTestEntity(name);
             }, config);
         });
     }
 
     private Integer insertTransaction(TransactionConfiguration config, String name) {
-        return transactionService.withWriteTransaction(() -> {
+        return transactionService.write(() -> {
             return insertIntoTestEntity(name);
         }, config);
     }
 
     private Integer insertAndExceptionTransaction(TransactionConfiguration config, String name,
             String exception) {
-        return transactionService.withWriteTransaction(() -> {
+        return transactionService.write(() -> {
             insertIntoTestEntity(name);
             throw new RuntimeException(exception);
         }, config);

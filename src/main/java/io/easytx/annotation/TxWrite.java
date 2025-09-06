@@ -17,4 +17,6 @@ public @interface TxWrite {
     Propagation propagation() default Propagation.REQUIRED;
 
     Isolation isolation() default Isolation.DEFAULT;
+
+    boolean useMicrometer = false;
 }
