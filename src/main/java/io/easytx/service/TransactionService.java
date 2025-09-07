@@ -1,7 +1,6 @@
 package io.easytx.service;
 
 import java.util.function.Supplier;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -16,20 +15,18 @@ public class TransactionService {
     private final TransactionTemplate writeTransactionTemplate;
     private final TransactionTemplate readTransactionTemplate;
 
-    private final JdbcTemplate writeJdbcTemplate;
-    private final JdbcTemplate readJdbcTemplate;
+    private final JdbcTemplate writeTemplate;
+    private final JdbcTemplate readTemplate;
 
-    public TransactionService(
-            @Qualifier("writeTransactionManager") PlatformTransactionManager writeTxManager,
-            @Qualifier("readTransactionManager") PlatformTransactionManager readTxManager,
-            @Qualifier("writeDataSource") javax.sql.DataSource writeDataSource,
-            @Qualifier("readDataSource") javax.sql.DataSource readDataSource) {
+    public TransactionService(PlatformTransactionManager writeTxManager,
+            PlatformTransactionManager readTxManager, JdbcTemplate writeTemplate,
+            JdbcTemplate readTemplate) {
 
         this.writeTransactionTemplate = new TransactionTemplate(writeTxManager);
         this.readTransactionTemplate = new TransactionTemplate(readTxManager);
 
-        this.writeJdbcTemplate = new JdbcTemplate(writeDataSource);
-        this.readJdbcTemplate = new JdbcTemplate(readDataSource);
+        this.writeTemplate = writeTemplate;
+        this.readTemplate = readTemplate;
     }
 
     // Transacción de escritura, con commit/rollback
