@@ -73,10 +73,10 @@ public class AutoConfiguration {
         return configureTemplate(txReadSource, routingDataSource, READ);
     }
 
-    private JdbcTemplate configureTemplate(DataSource txReadSource, DataSource routingDataSource,
+    private JdbcTemplate configureTemplate(DataSource dataSource, DataSource routingDataSource,
             String type) {
-        if (txReadSource != null) {
-            return new JdbcTemplate(txReadSource);
+        if (dataSource != null) {
+            return new JdbcTemplate(dataSource);
         } else if (routingDataSource != null) {
             return new JdbcTemplate(getFromRouting(routingDataSource, type));
         } else {
